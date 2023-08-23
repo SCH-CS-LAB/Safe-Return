@@ -3,6 +3,18 @@ from django.http import HttpResponse, JsonResponse
 from rest_framework import viewsets
 from rest_framework import permissions
 from rest_framework.decorators import api_view
+import tensorflow as tf
+import os
+
+import networkx as nx
+import osmnx as ox
+import matplotlib.cm as cm
+import matplotlib.colors as colors
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+import folium
+import geopandas as gpd
 
 from .serializers import UserSerializer, GroupSerializer
 
@@ -24,10 +36,9 @@ class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+
+
 @api_view(['POST'])
 def test_view(request):
     if request.method == 'POST':
-        if request.data['test'] == 'test':
-            return JsonResponse({'message': 'YesYesYes'}, status=200)
-        return JsonResponse({'message': 'It is POST request.'}, status=200)
-    return JsonResponse({'message': 'It is GET request.'}, status=400)
+        return JsonResponse({'message': [[37, 12],[37.2, 12.3],[37.3, 12.5]]}, status=200)

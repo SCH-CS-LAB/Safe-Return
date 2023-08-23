@@ -34,6 +34,12 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10
 }
 
+import os
+
+STATIC_URL = 'static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
+
 # Application definition
 
 INSTALLED_APPS = [
