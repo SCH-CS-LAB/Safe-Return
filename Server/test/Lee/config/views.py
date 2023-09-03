@@ -41,4 +41,4 @@ class GroupViewSet(viewsets.ModelViewSet):
 @api_view(['POST'])
 def test_view(request):
     if request.method == 'POST':
-        return JsonResponse({'message': [[37, 12],[37.2, 12.3],[37.3, 12.5]]}, status=200)
+        return JsonResponse({'root': [[37, 12],[37.2, 12.3],[37.3, 12.5]]}, status=200)
