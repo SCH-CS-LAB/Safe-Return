@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title> TESTPAGE </title>
+
+    <!-- CDN을 사용하여 import -->
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+</head>
+
+<body>
+    <div>
+        <h1 style="text-align: center;"> TEST PAGE </h1>
+        <hr>
+        <div>
+            {% for mark in mark_list %}
+            <li> name: {{ mark.name }} / latitude: {{ mark.latitude }} / longitude: {{ mark.longitude }}</li>
+            {% endfor %}
+        </div>
+        <!-- action 추가해서 페이지에서 위도경도 post하면 받아서 DB에 추가>marking>새로고침되면서 적용되도록 -->
+        <form action="" method="post">
+            <input name="new_latitude" type="text">
+            <input name="new_longitude" type="text">
+            <input type="submit" value="ADD">
+        </form>
+        <hr>
+    </div>
+    <div id="folium">
+        <!-- pyscript 패키지 추가 -->
+        <py-config>
+            packages = [
+            "folium",
+            "pandas"
+            ]
+            plugins = [
+            "https://pyscript.net/latest/plugins/python/py_tutor.py"
+            ]
+        </py-config>
+        <py-script>
+            import folium
+            import json
+            import pandas as pd
+
+            from pyodide.http import open_url
+
+            url = (
+            "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data"
+            )
+            state_geo = f"{url}/us-states.json"
+            state_unemployment = f"{url}/US_Unemployment_Oct2012.csv"
+            state_data = pd.read_csv(open_url(state_unemployment))
+            geo_json = json.loads(open_url(state_geo).read())
+
+            #<!-- folium Map 시작 좌표 / 확대 정도 지정 -->
+            m = folium.Map(location=[{{ latitude }}, {{ longitude }}], zoom_start=3)
+
+            folium.Choropleth(
+            geo_data=geo_json,
+            name="choropleth",
+            data=state_data,
+            columns=["State", "Unemployment"],
+            key_on="feature.id",
+            fill_color="YlGn",
+            fill_opacity=0.7,
+            line_opacity=0.2,
+            legend_name="Unemployment Rate (%)",
+            ).add_to(m)
+
+            #<!-- pyscript 사이에 jinja2 templates 적용 -->
+            {% for mark in mark_list %}
+            folium.Marker(location=[{{ mark.latitude }}, {{ mark.longitude }}], popup="{{ mark.name }}").add_to(m)
+            {% endfor %}
+
+            folium.LayerControl().add_to(m)
+
+            display(m, target="folium")
+        </py-script>
+    </div>
+</body>
+
+</html>
