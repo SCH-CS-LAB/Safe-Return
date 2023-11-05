@@ -1,5 +1,7 @@
 import requests
-import getAppKey # SK AppKey 불러온다
+import geopandas as gpd
+from shapely.geometry import Point
+from shapely.ops import nearest_points
 
 class SK_API_CLASS:
     '''SK API를 이용해 길찾기를 제공하는 클래스
@@ -19,19 +21,29 @@ class SK_API_CLASS:
         @var appkey -> SK API 키 값
         @var headers -> POST 통신 기본 헤더 값
         '''
-        self.appkey = getAppKey.GetAppKey()
+        self.appkey = 'AGDrqSCZzya3GshmeroNH8riWQSANOc868dvdL72'
         self.headers = self.setHeaders()
+        self.negetive_data = gpd.read_file("C:/Users/dldls/OneDrive/바탕 화면/Safe-return/Server/live/shapes/neget.shp")
+        self.positive_data = gpd.read_file("C:/Users/dldls/OneDrive/바탕 화면/Safe-return/Server/live/shapes/positive_state.shp")
+        
+        self.negetive_data_list = []
+        for _, site in self.negetive_data.iterrows():
+            self.negetive_data_list.append(site["geometry"])
 
-    def debugApiTest(self):
+        self.positive_data_list = []
+        for _, site in self.positive_data.iterrows():
+            self.positive_data_list.append(site["geometry"])
+
+    def debugApiTest(self, a, startPoint, endPoint):
         '''테스트용 이므로 사용 X'''
         url = 'https://apis.openapi.sk.com/tmap/routes/pedestrian'
         appkey = 'AGDrqSCZzya3GshmeroNH8riWQSANOc868dvdL72'
 
         # X, Y 좌표 바뀌어 있음
-        startX = 126.93489
-        startY = 36.76905
-        endX = 126.93263
-        endY = 36.7737
+        startX = startPoint[0]
+        startY = startPoint[1]
+        endX = endPoint[0]
+        endY = endPoint[1]
         startName = '출발지'
         endName = '도착지'
 
@@ -46,10 +58,12 @@ class SK_API_CLASS:
             "endX": endX,
             "endY": endY,
             "startName": startName,
-            "endName": endName
+            "endName": endName,
+            "seachOption": str(a)
         }
 
-        print(requests.post(url, headers=header, json=data).json())
+        jsonData = self.returnApiJson(url, self.headers, data)
+        return self.returnApiRoute(jsonData)
 
     def setHeaders(self) -> dict:
         '''헤더 지정 후 헤더를 반환하는 함수
@@ -72,7 +86,9 @@ class SK_API_CLASS:
 
         @return Json 형식인 POST의 응답
         '''
-        return requests.post(url, headers=headers, json=data).json()
+        post_data = requests.post(url, headers=headers, json=data).json()
+
+        return post_data
     
     def returnApiRoute(self, jsonData:str) -> list:
         '''API POST 통신 후 반환된 Json을 받아 동선 리스트를 반환
@@ -99,6 +115,91 @@ class SK_API_CLASS:
 
         return route_list
     
+    def returnEditRoute(self, jsonData:str) -> list:
+
+        edit_route_list = []
+        for feature in jsonData['features']:
+            types = feature['geometry']['type']
+
+            if types == "Point":
+                values = feature["geometry"]['coordinates']
+                edit_route_list.append(values)
+
+        return edit_route_list
+    
+    def apiWalker(self, startPoint:tuple, endPoint:tuple, edit_route) -> list:
+        '''우회 경로 새로 생성 후 반환
+        '''
+
+        viaList = [
+            {
+                "viaPointId" : "test",
+                "viaPointName" : "test",
+                "viaX" : f"{x}",
+                "viaY" : f"{y}",
+            } for x, y in edit_route
+        ]
+
+        url = 'https://apis.openapi.sk.com/tmap/routes/routeSequential30?version=1'
+
+        data = {
+            "startName" : "출발",
+            "startX" : str(startPoint[0]),
+            "startY" : str(startPoint[1]),
+            "startTime" : "202310280310",
+            "endName" : "도착",
+            "endX" : str(endPoint[0]),
+            "endY" : str(endPoint[1]),
+            "viaPoints" : viaList
+        }
+
+        jsonData = self.returnApiJson(url, self.headers, data)
+
+        edit_distance = jsonData["properties"]["totalDistance"]
+        edit_time = jsonData["properties"]["totalTime"]
+
+        route = self.returnApiRoute(jsonData)
+
+        new_route = []
+        for i, j in route:
+            new_route.append([i, j])
+
+        return new_route, edit_distance, edit_time
+
+    def algorithm(self, route:list) -> list:
+        '''동선을 받아서 피하는 동선 새로 생성
+        '''
+        edit_list = []
+
+        unsafe = 0
+        for x, y in route:
+            point = Point(x, y)
+            check = True
+            for site in self.negetive_data_list:
+
+                if point.within(site):
+                    nearest = nearest_points(site, point)
+                    edit_list.append(nearest[1])
+                    unsafe += 1
+                    check = False
+                    break
+            
+            if check:
+                edit_list.append([x, y])
+
+        safe = 0
+        for x, y in route:
+            point = Point(x, y)
+
+            for site in self.positive_data_list:
+                if point.within(site):
+                    safe += 1
+                    break
+
+        print(f"위험지역: {len(edit_list)} 안전지역: {safe}")
+
+        return edit_list
+
     def apiWalkerStartEnd(self, startPoint:tuple, endPoint:tuple) -> list:
         '''SK API를 이용해 도보 동선을 반환하는 함수
         @param startPoint -> 시작지점 좌표 튜플
@@ -132,4 +233,14 @@ class SK_API_CLASS:
         }
 
         jsonData = self.returnApiJson(url, self.headers, data)
-        return self.returnApiRoute(jsonData)
+        route_totalDistance = jsonData['features'][0]['properties']['totalDistance']
+        route_totalTime = jsonData['features'][0]['properties']['totalTime']
+
+        route = self.returnApiRoute(jsonData)
+        edit_route = self.returnEditRoute(jsonData)
+
+        edit_route = self.algorithm(edit_route)
+
+        edit_route, edit_distance, edit_time = self.apiWalker((startX, startY), (endX, endY), edit_route)
+
+        return route, route_totalDistance, route_totalTime, edit_route, edit_distance, edit_time
