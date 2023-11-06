@@ -23,7 +23,7 @@ class SK_API_CLASS:
         '''
         self.appkey = 'AGDrqSCZzya3GshmeroNH8riWQSANOc868dvdL72'
         self.headers = self.setHeaders()
-        self.negetive_data = gpd.read_file("C:/Users/dldls/OneDrive/바탕 화면/Safe-return/Server/live/shapes/neget.shp")
+        self.negetive_data = gpd.read_file("C:/Users/dldls/OneDrive/바탕 화면/Safe-return/Server/live/shapes/negetive.shp")
         self.positive_data = gpd.read_file("C:/Users/dldls/OneDrive/바탕 화면/Safe-return/Server/live/shapes/positive_state.shp")
         
         self.negetive_data_list = []
@@ -170,22 +170,31 @@ class SK_API_CLASS:
         '''동선을 받아서 피하는 동선 새로 생성
         '''
         edit_list = []
+        return_list = []
 
         unsafe = 0
+        cnt = 0
+
         for x, y in route:
             point = Point(x, y)
-            check = True
+            not_dump = True
             for site in self.negetive_data_list:
-
                 if point.within(site):
+                    unsafe += 1
+                    cnt += 1
                     nearest = nearest_points(site, point)
                     edit_list.append(nearest[1])
-                    unsafe += 1
-                    check = False
+                    not_dump = False
                     break
             
-            if check:
-                edit_list.append([x, y])
+            if not_dump and cnt:
+                cnt = 0
+                not_dump = True
+                
+                val = edit_list[int((len(edit_list)-1) / 2)]
+                return_list.append([val.x, val.y])  
+
+                edit_list = []
 
         safe = 0
         for x, y in route:
@@ -195,10 +204,12 @@ class SK_API_CLASS:
                 if point.within(site):
                     safe += 1
                     break
+        
 
-        print(f"위험지역: {len(edit_list)} 안전지역: {safe}")
 
-        return edit_list
+        print(f"위험지역: {unsafe} 안전지역: {safe}")
+
+        return return_list
 
     def apiWalkerStartEnd(self, startPoint:tuple, endPoint:tuple) -> list:
         '''SK API를 이용해 도보 동선을 반환하는 함수
@@ -241,6 +252,12 @@ class SK_API_CLASS:
 
         edit_route = self.algorithm(edit_route)
 
-        edit_route, edit_distance, edit_time = self.apiWalker((startX, startY), (endX, endY), edit_route)
+        if len(edit_route):
+            print(edit_route)
+            edit_route, edit_distance, edit_time = self.apiWalker((startX, startY), (endX, endY), edit_route)
+        else:
+            edit_route = route
+            edit_distance = route_totalDistance
+            edit_time = route_totalTime
 
         return route, route_totalDistance, route_totalTime, edit_route, edit_distance, edit_time
